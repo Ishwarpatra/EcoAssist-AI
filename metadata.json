@@ -1,0 +1,6 @@
+{
+  "name": "Eco Assistant",
+  "description": "An AI-powered sustainability assistant that calculates footprints, prioritizes reduction opportunities, and tracks goals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
