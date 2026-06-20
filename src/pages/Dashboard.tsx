@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '../components/auth-provider';
+import { useData } from '../components/data-provider';
 import { useApi } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Footprints, Target, Activity, Lightbulb, TrendingDown } from 'lucide-react';
@@ -82,25 +83,10 @@ function AnimatedDecimal({ value }: { value: number }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { fetchWithAuth } = useApi();
-  const [data, setData] = useState({ assessments: [], goals: [] } as any);
-  const [loading, setLoading] = useState(true);
+  const { data, loading } = useData();
 
   // What-If Simulator state
   const [flightsPerYear, setFlightsPerYear] = useState(8);
-
-  useEffect(() => {
-    async function loadData() {
-       if (!user) return;
-       const token = await user.getIdToken();
-       const res = await fetchWithAuth('/api/dashboard', token);
-       if (res.ok) {
-         setData(await res.json());
-       }
-       setLoading(false);
-    }
-    loadData();
-  }, [user]);
 
   const SkeletonCard = ({ className }: { className?: string }) => (
     <div className={`bg-white border text-center text-slate-200 rounded-3xl p-6 shadow-sm animate-pulse ${className}`}>
@@ -110,10 +96,20 @@ export default function Dashboard() {
     </div>
   );
 
+  const chartData = useMemo(() => {
+    const latestAssessment = data?.assessments?.[0];
+    return latestAssessment ? [
+      { name: 'Transport', value: latestAssessment.transportScore },
+      { name: 'Energy', value: latestAssessment.energyScore },
+      { name: 'Food', value: latestAssessment.foodScore },
+      { name: 'Waste', value: latestAssessment.wasteScore },
+    ] : [];
+  }, [data?.assessments]);
+
   if (loading) return (
     <div className="space-y-6">
       <div className="h-8 bg-slate-200 rounded w-1/4 animate-pulse"></div>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 auto-rows-[minmax(0,1fr)] lg:h-[600px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 auto-rows-auto lg:min-h-[600px]">
         <SkeletonCard className="lg:col-span-3 lg:row-span-3" />
         <SkeletonCard className="lg:col-span-6 lg:row-span-6" />
         <SkeletonCard className="lg:col-span-3 lg:row-span-3" />
@@ -123,14 +119,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const latestAssessment = data.assessments?.[0];
-
-  const chartData = latestAssessment ? [
-    { name: 'Transport', value: latestAssessment.transportScore },
-    { name: 'Energy', value: latestAssessment.energyScore },
-    { name: 'Food', value: latestAssessment.foodScore },
-    { name: 'Waste', value: latestAssessment.wasteScore },
-  ] : [];
+  const latestAssessment = data?.assessments?.[0];
 
   const COLORS = ['#1B5E20', '#0288D1', '#F59E0B', '#DC2626'];
 
@@ -228,7 +217,7 @@ export default function Dashboard() {
                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 auto-rows-[minmax(0,1fr)] lg:h-[600px]">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 auto-rows-auto lg:min-h-[600px]">
               
               {/* Score Card */}
               <Card className="lg:col-span-3 lg:row-span-3 bg-white border border-slate-200 rounded-3xl p-6 flex flex-col justify-between shadow-sm">

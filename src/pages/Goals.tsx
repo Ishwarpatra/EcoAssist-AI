@@ -1,44 +1,29 @@
-import { useEffect, useState } from 'react';
+// ... Keep imports ...
+import { useState } from 'react';
 import { useAuth } from '../components/auth-provider';
+import { useData } from '../components/data-provider';
 import { useApi } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'motion/react';
-import { Target, CheckCircle2, Trash2, Edit2, X, Save } from 'lucide-react';
+import { Target, CheckCircle2, Trash2, Edit2, X, Save, FileQuestion } from 'lucide-react';
 
 export default function Goals() {
   const { user } = useAuth();
+  const { data, loading, refreshData } = useData();
   const { fetchWithAuth } = useApi();
-  const [goals, setGoals] = useState<any[]>([]);
   const [newTitle, setNewTitle] = useState('');
   const [newTarget, setNewTarget] = useState('');
-  const [loading, setLoading] = useState(true);
+  const goals = data?.goals || [];
 
-  // Edit State
+  // Edit State Modal
   const [editingGoalId, setEditingGoalId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editTarget, setEditTarget] = useState('');
 
-  useEffect(() => {
-    async function fetchGoals() {
-      if (!user) return;
-      try {
-        const token = await user.getIdToken();
-        const res = await fetchWithAuth('/api/dashboard', token);
-        if (res.ok) {
-           const data = await res.json();
-           setGoals(data.goals || []);
-        }
-      } catch (err) {
-        console.error("Error fetching goals", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchGoals();
-  }, [user]);
+
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,8 +35,7 @@ export default function Goals() {
         body: JSON.stringify({ title: newTitle, targetReduction: parseInt(newTarget) }),
       });
       if (res.ok) {
-        const goal = await res.json();
-        setGoals([goal, ...goals]);
+        await refreshData();
         setNewTitle('');
         setNewTarget('');
       }
@@ -68,7 +52,7 @@ export default function Goals() {
         method: 'DELETE'
       });
       if (res.ok) {
-        setGoals(goals.filter(g => g.id !== id));
+        await refreshData();
       }
     } catch(err) {
       console.error("Error deleting goal", err);
@@ -90,12 +74,27 @@ export default function Goals() {
         body: JSON.stringify({ title: editTitle, targetReduction: parseInt(editTarget) })
       });
       if (res.ok) {
-        const updatedGoal = await res.json();
-        setGoals(goals.map(g => g.id === id ? { ...g, goalTitle: updatedGoal.goalTitle, title: updatedGoal.goalTitle, targetReduction: updatedGoal.targetReduction } : g));
+        await refreshData();
         setEditingGoalId(null);
       }
     } catch(err) {
       console.error("Error updating goal", err);
+    }
+  };
+
+  const handleUpdateProgress = async (id: number, currentProgress: number, addAmount: number) => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetchWithAuth(`/api/goals/${id}/progress`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ progress: currentProgress + addAmount })
+      });
+      if (res.ok) {
+        await refreshData();
+      }
+    } catch(err) {
+      console.error("Error updating progress", err);
     }
   };
 
@@ -141,7 +140,7 @@ export default function Goals() {
                      <Target className="h-5 w-5 text-green-300" />
                      <span className="text-xs font-bold text-green-300 uppercase tracking-widest">This Week's Mission</span>
                    </div>
-                   {goals.length > 0 && editingGoalId !== goals[0].id && (
+                   {goals.length > 0 && (
                      <div className="flex gap-2">
                        <button onClick={() => handeStartEdit(goals[0])} className="text-white/60 hover:text-white transition-colors bg-black/20 p-2 rounded-full">
                          <Edit2 className="h-4 w-4" />
@@ -153,40 +152,10 @@ export default function Goals() {
                    )}
                 </div>
                 {goals.length > 0 ? (
-                  editingGoalId === goals[0].id ? (
-                    <div className="space-y-4 mb-12">
-                       <div>
-                         <Label className="text-white/90 font-bold mb-1 block">Mission Title</Label>
-                         <Input 
-                           value={editTitle}
-                           onChange={e => setEditTitle(e.target.value)}
-                           className="bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-xl"
-                         />
-                       </div>
-                       <div>
-                         <Label className="text-white/90 font-bold mb-1 block">Target Reduction (kg CO₂)</Label>
-                         <Input 
-                           value={editTarget}
-                           type="number"
-                           onChange={e => setEditTarget(e.target.value)}
-                           className="bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-xl"
-                         />
-                       </div>
-                       <div className="flex gap-3">
-                         <Button onClick={() => setEditingGoalId(null)} variant="outline" className="bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white">
-                           Cancel
-                         </Button>
-                         <Button onClick={() => handleSaveEdit(goals[0].id)} className="bg-green-500 hover:bg-green-400 text-green-950 font-bold">
-                           <Save className="h-4 w-4 mr-2" /> Save Changes
-                         </Button>
-                       </div>
-                    </div>
-                  ) : (
-                    <>
-                      <h2 className="text-3xl font-black leading-tight mb-2">{goals[0].goalTitle || goals[0].title}</h2>
-                      <p className="text-white/80 font-medium mb-12">Focus on this single habit to make an outsized impact.</p>
-                    </>
-                  )
+                  <>
+                    <h2 className="text-3xl font-black leading-tight mb-2">{goals[0].goalTitle || goals[0].title}</h2>
+                    <p className="text-white/80 font-medium mb-12">Focus on this single habit to make an outsized impact.</p>
+                  </>
                 ) : (
                   <>
                     <h2 className="text-3xl font-black leading-tight mb-2">Kickstart your journey</h2>
@@ -204,17 +173,29 @@ export default function Goals() {
                      </div>
                      <div className="text-right">
                         <p className="text-xs font-bold uppercase tracking-widest text-white/60 mb-1">Progress</p>
-                        <p className="text-xl font-bold">{Math.round((goals[0].progress / goals[0].targetReduction) * 100)}%</p>
+                        <p className="text-xl font-bold">{Math.round((goals[0].progress / (goals[0].targetReduction || 1)) * 100) || 0}%</p>
                      </div>
                   </div>
                   
-                  <div className="w-full h-3 bg-black/20 rounded-full overflow-hidden">
+                  <div className="w-full h-3 bg-black/20 rounded-full overflow-hidden mb-4">
                      <motion.div 
                        className="h-full bg-gradient-to-r from-green-400 to-emerald-300 rounded-full shadow-[0_0_10px_rgba(74,222,128,0.5)]" 
                        initial={{ width: 0 }}
-                       animate={{ width: `${Math.min(100, Math.round((goals[0].progress / goals[0].targetReduction) * 100))}%` }}
+                       animate={{ width: `${Math.min(100, Math.round((goals[0].progress / (goals[0].targetReduction || 1)) * 100) || 0)}%` }}
                        transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
                      ></motion.div>
+                  </div>
+                  
+                  <div className="flex gap-2 justify-end">
+                     <button onClick={() => handleUpdateProgress(goals[0].id, goals[0].progress, 1)} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-lg transition-colors border border-white/20">
+                        +1 kg
+                     </button>
+                     <button onClick={() => handleUpdateProgress(goals[0].id, goals[0].progress, 5)} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-lg transition-colors border border-white/20">
+                        +5 kg
+                     </button>
+                     <button onClick={() => handleUpdateProgress(goals[0].id, goals[0].progress, 10)} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-lg transition-colors border border-white/20">
+                        +10 kg
+                     </button>
                   </div>
                </div>
              )}
@@ -229,27 +210,36 @@ export default function Goals() {
                </CardHeader>
                <CardContent className="p-0">
                  <div className="space-y-3">
-                   <div className="flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                   <button 
+                     onClick={() => { setNewTitle('Use public transport twice'); setNewTarget('15'); }}
+                     className="w-full text-left flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 focus:outline-[#1B5E20]"
+                   >
                       <div className="w-5 h-5 rounded border-2 border-slate-300 mt-0.5 shrink-0 flex items-center justify-center bg-blue-600 border-blue-600 text-white">✓</div>
                       <div>
                         <p className="font-bold text-blue-900 text-sm">Use public transport twice</p>
                         <p className="text-xs text-blue-600 font-medium mt-1">- 15 kg CO₂</p>
                       </div>
-                   </div>
-                   <div className="flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                   </button>
+                   <button 
+                     onClick={() => { setNewTitle('Combine errands into one trip'); setNewTarget('8'); }}
+                     className="w-full text-left flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 focus:outline-[#1B5E20]"
+                   >
                       <div className="w-5 h-5 rounded border-2 border-slate-300 mt-0.5 shrink-0"></div>
                       <div>
                         <p className="font-semibold text-slate-800 text-sm">Combine errands into one trip</p>
                         <p className="text-xs text-slate-500 mt-1">- 8 kg CO₂</p>
                       </div>
-                   </div>
-                   <div className="flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                   </button>
+                   <button 
+                     onClick={() => { setNewTitle('Avoid one short regional flight'); setNewTarget('52'); }}
+                     className="w-full text-left flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 focus:outline-[#1B5E20]"
+                   >
                       <div className="w-5 h-5 rounded border-2 border-slate-300 mt-0.5 shrink-0"></div>
                       <div>
                         <p className="font-bold text-slate-800 text-sm">Avoid one short regional flight</p>
                         <p className="text-xs text-slate-500 font-medium mt-1">- 52 kg CO₂</p>
                       </div>
-                   </div>
+                   </button>
                  </div>
                </CardContent>
             </Card>
@@ -289,9 +279,9 @@ export default function Goals() {
         </div>
       </div>
       
-      {goals.length > 1 && (
-        <div className="mt-12">
-          <h3 className="text-lg font-bold text-slate-800 mb-4">Past & Other Active Missions</h3>
+      <div className="mt-12">
+        <h3 className="text-lg font-bold text-slate-800 mb-4">Past & Other Active Missions</h3>
+        {goals.length > 1 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {goals.slice(1).map((goal, i) => (
               <motion.div
@@ -302,35 +292,6 @@ export default function Goals() {
                 layout
               >
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-full flex flex-col justify-between group">
-                   {editingGoalId === goal.id ? (
-                     <div className="space-y-4 mb-4">
-                        <div>
-                          <Label className="text-slate-700 font-bold mb-1 block">Mission Title</Label>
-                          <Input 
-                            value={editTitle}
-                            onChange={e => setEditTitle(e.target.value)}
-                            className="bg-slate-50 border-slate-200 rounded-xl w-full"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-slate-700 font-bold mb-1 block">Target Reduction (kg CO₂)</Label>
-                          <Input 
-                            value={editTarget}
-                            type="number"
-                            onChange={e => setEditTarget(e.target.value)}
-                            className="bg-slate-50 border-slate-200 rounded-xl w-full"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button onClick={() => setEditingGoalId(null)} variant="outline" size="sm" className="w-full">
-                            Cancel
-                          </Button>
-                          <Button onClick={() => handleSaveEdit(goal.id)} size="sm" className="w-full bg-[#1B5E20] hover:bg-[#2E7D32]">
-                            Save
-                          </Button>
-                        </div>
-                     </div>
-                   ) : (
                      <div>
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-bold text-slate-800 leading-tight flex-1 mr-2">{goal.goalTitle || goal.title}</h4>
@@ -345,16 +306,15 @@ export default function Goals() {
                         </div>
                         <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">{goal.targetReduction} kg CO₂ target</p>
                      </div>
-                   )}
                    <div className="mt-6">
                       <div className="flex justify-between text-xs font-bold mb-2 text-slate-600">
                          <span>Progress</span>
-                         <span>{Math.round((goal.progress / goal.targetReduction) * 100)}%</span>
+                         <span>{Math.round((goal.progress / (goal.targetReduction || 1)) * 100) || 0}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                          <div 
                            className="h-full bg-[#1B5E20] rounded-full" 
-                           style={{ width: `${Math.min(100, Math.round((goal.progress / goal.targetReduction) * 100))}%` }}
+                           style={{ width: `${Math.min(100, Math.round((goal.progress / (goal.targetReduction || 1)) * 100) || 0)}%` }}
                          ></div>
                       </div>
                    </div>
@@ -362,8 +322,74 @@ export default function Goals() {
               </motion.div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="bg-white border text-center border-slate-200 border-dashed rounded-3xl p-12 shadow-sm flex flex-col items-center justify-center min-h-[250px]">
+             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+                <FileQuestion className="h-8 w-8 text-slate-300" />
+             </div>
+             <p className="text-lg font-bold text-slate-700 mb-1">No Past Missions</p>
+             <p className="text-sm font-medium text-slate-500">Your mission history will appear here once you create more missions.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Edit Modal Overlay */}
+      <AnimatePresence>
+        {editingGoalId !== null && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setEditingGoalId(null)}
+                className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              
+              <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <Edit2 className="h-6 w-6 text-green-600" /> Edit Mission
+              </h3>
+              
+              <div className="space-y-5">
+                <div>
+                  <Label className="text-slate-700 font-bold mb-2 block">Mission Title</Label>
+                  <Input 
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    className="bg-slate-50 border-slate-200 rounded-xl py-6 px-4"
+                  />
+                </div>
+                <div>
+                  <Label className="text-slate-700 font-bold mb-2 block">Target Reduction (kg CO₂)</Label>
+                  <Input 
+                    value={editTarget}
+                    type="number"
+                    onChange={e => setEditTarget(e.target.value)}
+                    className="bg-slate-50 border-slate-200 rounded-xl py-6 px-4"
+                  />
+                </div>
+                <div className="pt-2">
+                  <Button 
+                    onClick={() => handleSaveEdit(editingGoalId)} 
+                    className="w-full py-6 bg-[#1B5E20] hover:bg-[#2E7D32] text-white rounded-xl font-bold text-lg"
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../components/auth-provider';
+import { useData } from '../components/data-provider';
 import { useApi } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,16 +10,6 @@ import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 
 function ThinkingDots() {
-  const [phase, setPhase] = useState(0);
-  const phases = ["Analyzing your footprint...", "Calculating highest-impact actions...", "Generating recommendations..."];
-  
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setPhase(p => (p + 1) % phases.length);
-    }, 2000);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <div className="flex justify-start mb-4">
        <motion.div 
@@ -30,17 +21,7 @@ function ThinkingDots() {
            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1B5E20] opacity-75"></span>
            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1B5E20]"></span>
          </span>
-         <AnimatePresence mode="wait">
-           <motion.span
-             key={phase}
-             initial={{ opacity: 0, x: -5 }}
-             animate={{ opacity: 1, x: 0 }}
-             exit={{ opacity: 0, x: 5 }}
-             transition={{ duration: 0.3 }}
-           >
-             {phases[phase]}
-           </motion.span>
-         </AnimatePresence>
+         <span>Analyzing dataset...</span>
        </motion.div>
     </div>
   );
@@ -48,26 +29,11 @@ function ThinkingDots() {
 
 export default function Assistant() {
   const { user } = useAuth();
+  const { data: snapshot } = useData();
   const { fetchWithAuth } = useApi();
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [snapshot, setSnapshot] = useState<any>(null);
-
-  useEffect(() => {
-    async function loadSnapshot() {
-      if (!user) return;
-      try {
-        const token = await user.getIdToken();
-        const res = await fetchWithAuth('/api/dashboard', token);
-        if (res.ok) {
-          const data = await res.json();
-          setSnapshot(data);
-        }
-      } catch (err) {}
-    }
-    loadSnapshot();
-  }, [user]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

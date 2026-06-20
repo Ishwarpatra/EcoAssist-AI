@@ -1,5 +1,6 @@
 import { Routes, Route, Link, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./components/auth-provider";
+import { DataProvider } from "./components/data-provider";
 import Dashboard from "./pages/Dashboard";
 import Assessment from "./pages/Assessment";
 import Assistant from "./pages/Assistant";
@@ -99,7 +100,9 @@ function Layout() {
 export default function App() {
   return (
     <AuthProvider>
-      <Layout />
+      <DataProvider>
+        <Layout />
+      </DataProvider>
     </AuthProvider>
   );
 }

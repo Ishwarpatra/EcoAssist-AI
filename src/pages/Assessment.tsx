@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../components/auth-provider';
+import { useData } from '../components/data-provider';
 import { useApi } from '../lib/api';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -12,43 +13,31 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function Assessment() {
   const { user } = useAuth();
+  const { data, loading, refreshData } = useData();
   const { fetchWithAuth } = useApi();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
   const totalSteps = 4;
   const [showForm, setShowForm] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [assessments, setAssessments] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    async function checkState() {
-      if (!user) return;
-      try {
-        const token = await user.getIdToken();
-        const res = await fetchWithAuth('/api/dashboard', token);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.assessments && data.assessments.length > 0) {
-            setAssessments(data.assessments);
-            setShowForm(false);
-          } else {
-            setShowForm(true);
-          }
-        }
-      } catch (err) {} finally {
-        setLoading(false);
+    if (!loading && data) {
+      if (data.assessments && data.assessments.length > 0) {
+        setShowForm(false);
+      } else {
+        setShowForm(true);
       }
     }
-    checkState();
-  }, [user]);
+  }, [loading, data]);
 
   const [inputs, setInputs] = useState({
-    flightsBase: '0',
-    kmBase: '100',
-    energyBase: 'moderate',
-    foodBase: 'moderate',
-    wasteBase: 'moderate'
+    flightsBase: '',
+    kmBase: '',
+    energyBase: '',
+    foodBase: '',
+    wasteBase: ''
   });
 
   const [scores, setScores] = useState({
@@ -60,6 +49,11 @@ export default function Assessment() {
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+    if (step === 1 && (inputs.flightsBase === '' || inputs.kmBase === '')) return;
+    if (step === 2 && inputs.energyBase === '') return;
+    if (step === 3 && inputs.foodBase === '') return;
+    if (step === 4 && inputs.wasteBase === '') return;
+
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
@@ -94,14 +88,22 @@ export default function Assessment() {
 
   const handleSubmit = async (computedScores: any) => {
     if (!user) return;
-    const token = await user.getIdToken();
-    const res = await fetchWithAuth('/api/assessments', token, {
-      method: 'POST',
-      body: JSON.stringify(computedScores),
-    });
-    
-    if (res.ok) {
-       navigate('/');
+    setIsSubmitting(true);
+    try {
+        const token = await user.getIdToken();
+        const res = await fetchWithAuth('/api/assessments', token, {
+          method: 'POST',
+          body: JSON.stringify(computedScores),
+        });
+        
+        if (res.ok) {
+           await refreshData();
+           navigate('/');
+        }
+    } catch (error) {
+        console.error("Submission error", error);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -174,7 +176,7 @@ export default function Assessment() {
   }
 
   // Define steps for card stack
-  const stepsData = [
+  const stepsData = useMemo(() => [
     {
       id: 1,
       title: "Transportation",
@@ -188,6 +190,7 @@ export default function Assessment() {
                onChange={e => setInputs({ ...inputs, flightsBase: e.target.value })}
                className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
              >
+               <option value="" disabled>Please select...</option>
                <option value="0">0 (I don't fly)</option>
                <option value="2">1-2 flights</option>
                <option value="5">3-5 flights</option>
@@ -221,6 +224,7 @@ export default function Assessment() {
             onChange={e => setInputs({ ...inputs, energyBase: e.target.value })}
             className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
           >
+            <option value="" disabled>Please select...</option>
             <option value="low">Low (Small apartment, no AC, energy efficient)</option>
             <option value="moderate">Moderate (Average house, standard usage)</option>
             <option value="high">High (Large house, frequent heating/cooling)</option>
@@ -240,6 +244,7 @@ export default function Assessment() {
             onChange={e => setInputs({ ...inputs, foodBase: e.target.value })}
             className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
           >
+            <option value="" disabled>Please select...</option>
             <option value="heavy_meat">Heavy Meat (Beef/lamb most days)</option>
             <option value="moderate">Moderate (Mixed diet, some meat)</option>
             <option value="vegetarian">Vegetarian (No meat, but dairy/eggs)</option>
@@ -260,6 +265,7 @@ export default function Assessment() {
             onChange={e => setInputs({ ...inputs, wasteBase: e.target.value })}
             className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
           >
+            <option value="" disabled>Please select...</option>
             <option value="great">Excellent (Compost, strict recycling, low packaging)</option>
             <option value="moderate">Average (Standard recycling, some plastic waste)</option>
             <option value="bad">Poor (Rarely recycle, high plastic usage)</option>
@@ -267,7 +273,7 @@ export default function Assessment() {
         </div>
       )
     }
-  ];
+  ], [inputs]);
 
   return (
     <div className="max-w-xl mx-auto py-8">
@@ -326,9 +332,10 @@ export default function Assessment() {
                         )}
                         <Button 
                           type="submit" 
+                          disabled={isSubmitting}
                           className="flex-1 py-6 bg-[#1B5E20] text-white rounded-2xl text-lg font-bold shadow-lg shadow-green-900/10 hover:bg-[#2E7D32] active:scale-[0.98] transition-all"
                         >
-                          {step === totalSteps ? 'Generate Twin' : 'Continue'}
+                          {isSubmitting ? 'Submitting...' : step === totalSteps ? 'Generate Twin' : 'Continue'}
                         </Button>
                       </div>
                     )}
