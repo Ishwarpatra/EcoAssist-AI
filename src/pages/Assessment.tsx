@@ -57,43 +57,19 @@ export default function Assessment() {
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
-      // Compute final scores right before submitting
-      const flightsP = parseInt(inputs.flightsBase) || 0;
-      const kmP = parseInt(inputs.kmBase) || 0;
-      const tScore = Math.round((flightsP * 200) + (kmP * 4 * 0.2));
-
-      let eScore = 150;
-      if (inputs.energyBase === 'high') eScore = 300;
-      if (inputs.energyBase === 'low') eScore = 80;
-
-      let fScore = 200;
-      if (inputs.foodBase === 'heavy_meat') fScore = 350;
-      if (inputs.foodBase === 'vegan') fScore = 80;
-
-      let wScore = 50;
-      if (inputs.wasteBase === 'bad') wScore = 120;
-      if (inputs.wasteBase === 'great') wScore = 20;
-
-      const newScores = {
-        transportScore: tScore,
-        energyScore: eScore,
-        foodScore: fScore,
-        wasteScore: wScore
-      };
-      
-      setScores(newScores);
-      handleSubmit(newScores);
+      // Send raw inputs, backend calculates score
+      handleSubmit(inputs);
     }
   };
 
-  const handleSubmit = async (computedScores: any) => {
+  const handleSubmit = async (rawInputs: any) => {
     if (!user) return;
     setIsSubmitting(true);
     try {
         const token = await user.getIdToken();
         const res = await fetchWithAuth('/api/assessments', token, {
           method: 'POST',
-          body: JSON.stringify(computedScores),
+          body: JSON.stringify(rawInputs),
         });
         
         if (res.ok) {
@@ -121,7 +97,7 @@ export default function Assessment() {
       <div className="space-y-8 max-w-5xl mx-auto">
         <div className="flex justify-between items-end">
            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Impact Journey</h1>
+              <h1 className="font-heading text-3xl font-extrabold tracking-tight text-slate-900">Impact Journey</h1>
               <p className="text-slate-500 mt-2">The narrative of your environmental footprint over time.</p>
            </div>
            <Button onClick={() => setShowForm(true)} variant="outline" className="rounded-xl border-slate-300 font-bold">
@@ -133,7 +109,7 @@ export default function Assessment() {
            <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col h-[400px]">
               <h2 className="text-lg font-bold text-slate-800 mb-6">Emissions Trend (tons CO₂)</h2>
               <div className="flex-1 w-full min-h-0">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorEmissions" x1="0" y1="0" x2="0" y2="1">
@@ -278,7 +254,7 @@ export default function Assessment() {
   return (
     <div className="max-w-xl mx-auto py-8">
       <div className="text-center mb-16">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Build Your Climate Twin</h1>
+        <h1 className="font-heading text-3xl font-extrabold tracking-tight text-slate-900 mb-2">Build Your Climate Twin</h1>
         <p className="text-slate-500">Provide a few daily habits to compute your digital footprint.</p>
         <div className="mt-8 flex justify-center gap-2">
            {stepsData.map((s) => (
@@ -313,32 +289,34 @@ export default function Assessment() {
                 className="absolute w-full px-4"
                 style={{ originY: 0 }}
               >
-                <Card className={`w-full bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden ${!isActive && 'pointer-events-none opacity-50'}`}>
+                <Card className={`w-full bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden ${!isActive ? 'pointer-events-none opacity-50' : ''}`} aria-hidden={!isActive}>
                   <form onSubmit={handleNext} className="p-8 pb-10">
-                    <div className="flex justify-between items-center mb-6">
-                      <div className="flex gap-4 text-3xl">{stepData.icon}</div>
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{step} of {totalSteps}</span>
-                    </div>
-                    
-                    <h2 className="text-2xl font-bold text-slate-800 mb-6">{stepData.title}</h2>
-                    {stepData.content}
-                    
-                    {isActive && (
-                      <div className="mt-10 flex gap-4">
-                        {step > 1 && (
-                          <Button type="button" variant="outline" onClick={() => setStep(step - 1)} className="w-1/3 py-6 bg-white border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50">
-                            Back
-                          </Button>
-                        )}
-                        <Button 
-                          type="submit" 
-                          disabled={isSubmitting}
-                          className="flex-1 py-6 bg-[#1B5E20] text-white rounded-2xl text-lg font-bold shadow-lg shadow-green-900/10 hover:bg-[#2E7D32] active:scale-[0.98] transition-all"
-                        >
-                          {isSubmitting ? 'Submitting...' : step === totalSteps ? 'Generate Twin' : 'Continue'}
-                        </Button>
+                    <fieldset disabled={!isActive} className="contents">
+                      <div className="flex justify-between items-center mb-6">
+                        <div className="flex gap-4 text-3xl">{stepData.icon}</div>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{step} of {totalSteps}</span>
                       </div>
-                    )}
+                      
+                      <h2 className="text-2xl font-bold text-slate-800 mb-6">{stepData.title}</h2>
+                      {stepData.content}
+                      
+                      {isActive && (
+                        <div className="mt-10 flex gap-4">
+                          {step > 1 && (
+                            <Button type="button" variant="outline" onClick={() => setStep(step - 1)} className="w-1/3 py-6 bg-white border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50">
+                              Back
+                            </Button>
+                          )}
+                          <Button 
+                            type="submit" 
+                            disabled={isSubmitting}
+                            className="flex-1 py-6 bg-[#1B5E20] text-white rounded-2xl text-lg font-bold shadow-lg shadow-green-900/10 hover:bg-[#2E7D32] active:scale-[0.98] transition-all"
+                          >
+                            {isSubmitting ? 'Submitting...' : step === totalSteps ? 'Generate Twin' : 'Continue'}
+                          </Button>
+                        </div>
+                      )}
+                    </fieldset>
                   </form>
                 </Card>
               </motion.div>

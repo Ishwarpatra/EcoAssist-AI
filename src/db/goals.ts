@@ -18,9 +18,13 @@ export async function getUserGoals(userId: number) {
     .orderBy(desc(goals.createdAt));
 }
 
-export async function updateGoalProgress(goalId: number, userId: number, progress: number, status: string) {
+export async function updateGoalProgress(goalId: number, userId: number, progress: number, status?: string) {
+  const updateValues: any = { progress };
+  if (status) {
+    updateValues.status = status;
+  }
   const result = await db.update(goals)
-    .set({ progress, status })
+    .set(updateValues)
     .where(eq(goals.id, goalId))
     .returning();
   return result[0];

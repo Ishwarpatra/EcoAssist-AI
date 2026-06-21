@@ -1,8 +1,13 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import compression from "compression";
+import morgan from "morgan";
 import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
 import { createAssessment, getUserAssessments } from "./src/db/assessments.ts";
@@ -23,11 +28,29 @@ const ai = new GoogleGenAI({
   }
 });
 
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Trust reverse proxy for rate-limiting and secure headers
+  app.set("trust proxy", 1);
+
+  app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+  }));
+  app.use(cors());
+  app.use(compression());
+  app.use(morgan("dev"));
   app.use(express.json());
+  
+  app.use("/api/", apiLimiter);
 
   // API Routes
   app.get("/api/health", (req, res) => {
@@ -50,15 +73,8 @@ async function startServer() {
 
   app.get("/api/dashboard", requireAuth, async (req: AuthRequest, res) => {
     try {
-       if (!req.user) {
-         res.status(401).json({ error: "Unauthorized" });
-         return;
-       }
-       // Fetch user from DB
-       const dbUsers = await db.select().from(users).where(eq(users.uid, req.user.uid)).limit(1);
-       if (dbUsers.length === 0) { res.status(404).json({ error: "User not found" }); return; }
-       
-       const dbUser = dbUsers[0];
+       if (!req.user || !req.dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
+       const dbUser = req.dbUser;
        const userAssessments = await getUserAssessments(dbUser.id);
        const userGoals = await getUserGoals(dbUser.id);
 
@@ -74,12 +90,28 @@ async function startServer() {
 
   app.post("/api/assessments", requireAuth, async (req: AuthRequest, res) => {
      try {
-       if (!req.user) { res.status(401).json({ error: "Unauthorized" }); return; }
-       const dbUsers = await db.select().from(users).where(eq(users.uid, req.user.uid)).limit(1);
-       if (dbUsers.length === 0) { res.status(404).json({ error: "User not found" }); return; }
+       if (!req.user || !req.dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
        
-       const dbUser = dbUsers[0];
-       const { transportScore, energyScore, foodScore, wasteScore } = req.body;
+       const dbUser = req.dbUser;
+       const { flightsBase, kmBase, energyBase, foodBase, wasteBase } = req.body;
+       
+       // Calculate backend scores
+       const flightsP = Math.max(0, parseInt(flightsBase) || 0);
+       const kmP = Math.max(0, parseInt(kmBase) || 0);
+       const transportScore = Math.round((flightsP * 200) + (kmP * 4 * 0.2));
+
+       let energyScore = 150;
+       if (energyBase === 'high') energyScore = 300;
+       if (energyBase === 'low') energyScore = 80;
+
+       let foodScore = 200;
+       if (foodBase === 'heavy_meat') foodScore = 350;
+       if (foodBase === 'vegan') foodScore = 80;
+
+       let wasteScore = 50;
+       if (wasteBase === 'bad') wasteScore = 120;
+       if (wasteBase === 'great') wasteScore = 20;
+
        const totalScore = transportScore + energyScore + foodScore + wasteScore;
        
        const assessment = await createAssessment(dbUser.id, {
@@ -95,11 +127,9 @@ async function startServer() {
 
   app.post("/api/goals", requireAuth, async (req: AuthRequest, res) => {
      try {
-       if (!req.user) { res.status(401).json({ error: "Unauthorized" }); return; }
-       const dbUsers = await db.select().from(users).where(eq(users.uid, req.user.uid)).limit(1);
-       if (dbUsers.length === 0) { res.status(404).json({ error: "User not found" }); return; }
+       if (!req.user || !req.dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
        
-       const dbUser = dbUsers[0];
+       const dbUser = req.dbUser;
        const { title, targetReduction } = req.body;
        
        const goal = await createGoal(dbUser.id, title, targetReduction);
@@ -112,11 +142,9 @@ async function startServer() {
 
   app.put("/api/goals/:id", requireAuth, async (req: AuthRequest, res) => {
      try {
-       if (!req.user) { res.status(401).json({ error: "Unauthorized" }); return; }
-       const dbUsers = await db.select().from(users).where(eq(users.uid, req.user.uid)).limit(1);
-       if (dbUsers.length === 0) { res.status(404).json({ error: "User not found" }); return; }
+       if (!req.user || !req.dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
        
-       const dbUser = dbUsers[0];
+       const dbUser = req.dbUser;
        const { title, targetReduction } = req.body;
        const goalId = parseInt(req.params.id);
        
@@ -132,11 +160,9 @@ async function startServer() {
 
   app.patch("/api/goals/:id/progress", requireAuth, async (req: AuthRequest, res) => {
      try {
-       if (!req.user) { res.status(401).json({ error: "Unauthorized" }); return; }
-       const dbUsers = await db.select().from(users).where(eq(users.uid, req.user.uid)).limit(1);
-       if (dbUsers.length === 0) { res.status(404).json({ error: "User not found" }); return; }
+       if (!req.user || !req.dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
        
-       const dbUser = dbUsers[0];
+       const dbUser = req.dbUser;
        const { progress } = req.body;
        const goalId = parseInt(req.params.id);
        
@@ -153,11 +179,9 @@ async function startServer() {
 
   app.delete("/api/goals/:id", requireAuth, async (req: AuthRequest, res) => {
      try {
-       if (!req.user) { res.status(401).json({ error: "Unauthorized" }); return; }
-       const dbUsers = await db.select().from(users).where(eq(users.uid, req.user.uid)).limit(1);
-       if (dbUsers.length === 0) { res.status(404).json({ error: "User not found" }); return; }
+       if (!req.user || !req.dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
        
-       const dbUser = dbUsers[0];
+       const dbUser = req.dbUser;
        const goalId = parseInt(req.params.id);
        
        if (isNaN(goalId)) { res.status(400).json({ error: "Invalid goal ID" }); return; }
@@ -246,6 +270,12 @@ Respond helpfully and concisely.`;
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Global Error Handler
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error("Unhandled Global Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

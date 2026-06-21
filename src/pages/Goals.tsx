@@ -12,7 +12,7 @@ import { Target, CheckCircle2, Trash2, Edit2, X, Save, FileQuestion } from 'luci
 
 export default function Goals() {
   const { user } = useAuth();
-  const { data, loading, refreshData } = useData();
+  const { data, loading, refreshData, mutateData } = useData() as any; // Typecast or avoid typescript error
   const { fetchWithAuth } = useApi();
   const [newTitle, setNewTitle] = useState('');
   const [newTarget, setNewTarget] = useState('');
@@ -23,8 +23,6 @@ export default function Goals() {
   const [editTitle, setEditTitle] = useState('');
   const [editTarget, setEditTarget] = useState('');
 
-
-
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -32,7 +30,7 @@ export default function Goals() {
       const token = await user.getIdToken();
       const res = await fetchWithAuth('/api/goals', token, {
         method: 'POST',
-        body: JSON.stringify({ title: newTitle, targetReduction: parseInt(newTarget) }),
+        body: JSON.stringify({ title: newTitle, targetReduction: Math.max(1, parseInt(newTarget) || 1) }),
       });
       if (res.ok) {
         await refreshData();
@@ -46,20 +44,28 @@ export default function Goals() {
 
   const handleDeleteGoal = async (id: number) => {
     if (!user) return;
+    
+    // Optimistic update
+    mutateData((prev: any) => {
+      if (!prev) return prev;
+      return { ...prev, goals: prev.goals.filter((g: any) => g.id !== id) };
+    });
+
     try {
       const token = await user.getIdToken();
       const res = await fetchWithAuth(`/api/goals/${id}`, token, {
         method: 'DELETE'
       });
-      if (res.ok) {
-        await refreshData();
+      if (!res.ok) {
+        await refreshData(); // Revert
       }
     } catch(err) {
       console.error("Error deleting goal", err);
+      await refreshData(); // Revert
     }
   };
 
-  const handeStartEdit = (goal: any) => {
+  const handleStartEdit = (goal: any) => {
     setEditingGoalId(goal.id);
     setEditTitle(goal.goalTitle || goal.title);
     setEditTarget(goal.targetReduction.toString());
@@ -67,34 +73,59 @@ export default function Goals() {
 
   const handleSaveEdit = async (id: number) => {
     if (!user) return;
+    
+    const targetRed = Math.max(1, parseInt(editTarget) || 1);
+    
+    // Optimistic
+    mutateData((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        goals: prev.goals.map((g: any) => g.id === id ? { ...g, goalTitle: editTitle, title: editTitle, targetReduction: targetRed } : g)
+      };
+    });
+    setEditingGoalId(null);
+
     try {
       const token = await user.getIdToken();
       const res = await fetchWithAuth(`/api/goals/${id}`, token, {
         method: 'PUT',
-        body: JSON.stringify({ title: editTitle, targetReduction: parseInt(editTarget) })
+        body: JSON.stringify({ title: editTitle, targetReduction: targetRed })
       });
-      if (res.ok) {
+      if (!res.ok) {
         await refreshData();
-        setEditingGoalId(null);
       }
     } catch(err) {
       console.error("Error updating goal", err);
+      await refreshData();
     }
   };
 
   const handleUpdateProgress = async (id: number, currentProgress: number, addAmount: number) => {
     if (!user) return;
+    
+    // Optimistic update
+    const newProgress = currentProgress + addAmount;
+    mutateData((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        goals: prev.goals.map((g: any) => g.id === id ? { ...g, progress: newProgress } : g)
+      };
+    });
+
     try {
       const token = await user.getIdToken();
       const res = await fetchWithAuth(`/api/goals/${id}/progress`, token, {
         method: 'PATCH',
-        body: JSON.stringify({ progress: currentProgress + addAmount })
+        body: JSON.stringify({ progress: newProgress })
       });
-      if (res.ok) {
-        await refreshData();
+      if (!res.ok) {
+         await refreshData(); // Revert on fail
       }
     } catch(err) {
       console.error("Error updating progress", err);
+      await refreshData();
     }
   };
 
@@ -123,7 +154,7 @@ export default function Goals() {
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       <div>
-         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Your Weekly Missions</h1>
+         <h1 className="font-heading text-3xl font-extrabold tracking-tight text-slate-900">Your Weekly Missions</h1>
          <p className="text-slate-500 mt-2">Achieve micro-goals to build better sustainable habits.</p>
       </div>
       
@@ -142,7 +173,7 @@ export default function Goals() {
                    </div>
                    {goals.length > 0 && (
                      <div className="flex gap-2">
-                       <button onClick={() => handeStartEdit(goals[0])} className="text-white/60 hover:text-white transition-colors bg-black/20 p-2 rounded-full">
+                       <button onClick={() => handleStartEdit(goals[0])} className="text-white/60 hover:text-white transition-colors bg-black/20 p-2 rounded-full">
                          <Edit2 className="h-4 w-4" />
                        </button>
                        <button onClick={() => handleDeleteGoal(goals[0].id)} className="text-white/60 hover:text-red-400 transition-colors bg-black/20 p-2 rounded-full">
@@ -153,7 +184,7 @@ export default function Goals() {
                 </div>
                 {goals.length > 0 ? (
                   <>
-                    <h2 className="text-3xl font-black leading-tight mb-2">{goals[0].goalTitle || goals[0].title}</h2>
+                    <h2 className="text-3xl font-black leading-tight mb-2 truncate max-w-[200px] md:max-w-md lg:max-w-xl xl:max-w-2xl">{goals[0].goalTitle || goals[0].title}</h2>
                     <p className="text-white/80 font-medium mb-12">Focus on this single habit to make an outsized impact.</p>
                   </>
                 ) : (
@@ -210,36 +241,49 @@ export default function Goals() {
                </CardHeader>
                <CardContent className="p-0">
                  <div className="space-y-3">
-                   <button 
-                     onClick={() => { setNewTitle('Use public transport twice'); setNewTarget('15'); }}
-                     className="w-full text-left flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 focus:outline-[#1B5E20]"
-                   >
-                      <div className="w-5 h-5 rounded border-2 border-slate-300 mt-0.5 shrink-0 flex items-center justify-center bg-blue-600 border-blue-600 text-white">✓</div>
-                      <div>
-                        <p className="font-bold text-blue-900 text-sm">Use public transport twice</p>
-                        <p className="text-xs text-blue-600 font-medium mt-1">- 15 kg CO₂</p>
-                      </div>
-                   </button>
-                   <button 
-                     onClick={() => { setNewTitle('Combine errands into one trip'); setNewTarget('8'); }}
-                     className="w-full text-left flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 focus:outline-[#1B5E20]"
-                   >
-                      <div className="w-5 h-5 rounded border-2 border-slate-300 mt-0.5 shrink-0"></div>
-                      <div>
-                        <p className="font-semibold text-slate-800 text-sm">Combine errands into one trip</p>
-                        <p className="text-xs text-slate-500 mt-1">- 8 kg CO₂</p>
-                      </div>
-                   </button>
-                   <button 
-                     onClick={() => { setNewTitle('Avoid one short regional flight'); setNewTarget('52'); }}
-                     className="w-full text-left flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 focus:outline-[#1B5E20]"
-                   >
-                      <div className="w-5 h-5 rounded border-2 border-slate-300 mt-0.5 shrink-0"></div>
-                      <div>
-                        <p className="font-bold text-slate-800 text-sm">Avoid one short regional flight</p>
-                        <p className="text-xs text-slate-500 font-medium mt-1">- 52 kg CO₂</p>
-                      </div>
-                   </button>
+                   {[
+                     { title: "Use public transport twice", target: "15" },
+                     { title: "Combine errands into one trip", target: "8" },
+                     { title: "Avoid one short regional flight", target: "52" }
+                   ].map((rec) => {
+                     const isSelected = newTitle === rec.title && newTarget === rec.target;
+                     return (
+                       <button 
+                         key={rec.title}
+                         type="button"
+                         onClick={() => {
+                           if (isSelected) {
+                             setNewTitle('');
+                             setNewTarget('');
+                           } else {
+                             setNewTitle(rec.title);
+                             setNewTarget(rec.target);
+                           }
+                         }}
+                         className={`w-full text-left flex items-start gap-3 p-3 rounded-2xl transition-all border ${
+                           isSelected 
+                             ? 'bg-blue-50/50 border-blue-200 shadow-sm' 
+                             : 'border-transparent hover:bg-slate-50 hover:border-slate-100'
+                         } focus:outline-[#1B5E20]`}
+                       >
+                          <div className={`w-5 h-5 rounded border-2 mt-0.5 shrink-0 flex items-center justify-center text-xs transition-colors ${
+                            isSelected 
+                              ? 'bg-blue-600 border-blue-600 text-white font-bold' 
+                              : 'border-slate-300'
+                          }`}>
+                            {isSelected ? '✓' : ''}
+                          </div>
+                          <div>
+                            <p className={`text-sm ${isSelected ? 'font-bold text-blue-900' : 'font-semibold text-slate-800'}`}>
+                              {rec.title}
+                            </p>
+                            <p className={`text-xs mt-1 ${isSelected ? 'text-blue-600 font-medium' : 'text-slate-500'}`}>
+                              - {rec.target} kg CO₂
+                            </p>
+                          </div>
+                       </button>
+                     );
+                   })}
                  </div>
                </CardContent>
             </Card>
@@ -253,6 +297,7 @@ export default function Goals() {
                     <div className="space-y-2">
                        <Input 
                          required 
+                         maxLength={80}
                          placeholder="e.g. Reduce flight frequency" 
                          value={newTitle}
                          onChange={e => setNewTitle(e.target.value)}
@@ -263,6 +308,8 @@ export default function Goals() {
                        <Input 
                          required 
                          type="number"
+                         min="1"
+                         max="10000"
                          placeholder="Target reduction" 
                          value={newTarget}
                          onChange={e => setNewTarget(e.target.value)}
@@ -294,9 +341,9 @@ export default function Goals() {
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-full flex flex-col justify-between group">
                      <div>
                         <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-bold text-slate-800 leading-tight flex-1 mr-2">{goal.goalTitle || goal.title}</h4>
+                          <h4 className="font-bold text-slate-800 leading-tight flex-1 mr-2 line-clamp-2" title={goal.goalTitle || goal.title}>{goal.goalTitle || goal.title}</h4>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button onClick={() => handeStartEdit(goal)} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full transition-colors">
+                             <button onClick={() => handleStartEdit(goal)} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full transition-colors">
                                <Edit2 className="h-3 w-3" />
                              </button>
                              <button onClick={() => handleDeleteGoal(goal.id)} className="text-slate-400 hover:text-red-500 bg-slate-100 p-1.5 rounded-full transition-colors">
@@ -364,6 +411,7 @@ export default function Goals() {
                   <Label className="text-slate-700 font-bold mb-2 block">Mission Title</Label>
                   <Input 
                     value={editTitle}
+                    maxLength={80}
                     onChange={e => setEditTitle(e.target.value)}
                     className="bg-slate-50 border-slate-200 rounded-xl py-6 px-4"
                   />
@@ -373,6 +421,8 @@ export default function Goals() {
                   <Input 
                     value={editTarget}
                     type="number"
+                    min="1"
+                    max="10000"
                     onChange={e => setEditTarget(e.target.value)}
                     className="bg-slate-50 border-slate-200 rounded-xl py-6 px-4"
                   />

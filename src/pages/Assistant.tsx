@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../components/auth-provider';
 import { useData } from '../components/data-provider';
 import { useApi } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { SendHorizontal } from 'lucide-react';
+import { SendHorizontal, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
 
 function ThinkingDots() {
@@ -34,21 +34,46 @@ export default function Assistant() {
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !user) return;
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const handleStop = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const sendMessage = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim() || !user || loading) return;
     
     const userMessage = input.trim();
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setInput('');
     setLoading(true);
 
+    const controller = new AbortController();
+    setAbortController(controller);
+
     try {
       const token = await user.getIdToken();
       const res = await fetchWithAuth('/api/ai/chat', token, {
         method: 'POST',
         body: JSON.stringify({ message: userMessage }),
+        signal: controller.signal,
       });
       
       if (res.ok) {
@@ -58,11 +83,16 @@ export default function Assistant() {
          const errorData = await res.json();
          setMessages(prev => [...prev, { role: 'assistant', content: `**Error:** ${errorData.error || 'Failed to get response'}` }]);
       }
-    } catch(err) {
-      console.error(err);
-      setMessages(prev => [...prev, { role: 'assistant', content: `**Error:** An unexpected error occurred.` }]);
+    } catch(err: any) {
+      if (err.name === 'AbortError') {
+         console.log('Generation aborted by user');
+      } else {
+         console.error(err);
+         setMessages(prev => [...prev, { role: 'assistant', content: `**Error:** An unexpected error occurred.` }]);
+      }
     } finally {
       setLoading(false);
+      setAbortController(null);
     }
   };
 
@@ -85,7 +115,7 @@ export default function Assistant() {
              animate={{ opacity: 1, y: 0 }}
              className="mb-6 p-4 rounded-2xl bg-[#F0FDF4] border border-green-100/50 shadow-sm"
           >
-             <h4 className="text-xs font-bold text-[#1B5E20] uppercase tracking-wider mb-3">Your Climate Snapshot</h4>
+             <h4 className="font-heading text-xs font-bold text-[#1B5E20] uppercase tracking-wider mb-3">Your Climate Snapshot</h4>
              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white px-3 py-3 rounded-xl shadow-sm border border-slate-100">
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Monthly Impact</p>
@@ -120,7 +150,7 @@ export default function Assistant() {
 
         {messages.length === 0 && (
           <div className="text-center py-10 px-4 text-slate-500">
-            <h3 className="text-lg font-bold mb-3 text-slate-800">Hi {user?.displayName ? user.displayName.split(' ')[0] : 'there'}, your climate twin is ready.</h3>
+            <h3 className="font-heading text-lg font-bold mb-3 text-slate-800">Hi {user?.displayName ? user.displayName.split(' ')[0] : 'there'}, your climate twin is ready.</h3>
             <p className="text-sm mb-6 max-w-sm mx-auto leading-relaxed">
               I can analyze your footprint, simulate future scenarios, or help you understand which lifestyle changes have the highest leverage.
             </p>
@@ -149,26 +179,34 @@ export default function Assistant() {
                  msg.content
                ) : (
                  <div className="markdown-body">
-                   <ReactMarkdown>{msg.content}</ReactMarkdown>
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                  </div>
                )}
             </div>
           </motion.div>
         ))}
         {loading && <ThinkingDots />}
+        <div ref={bottomRef} />
       </CardContent>
       <CardFooter className="p-4 md:p-6 bg-white shrink-0">
         <form onSubmit={sendMessage} className="w-full relative">
-          <Input 
+          <textarea 
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Ask about your footprint..."
-            className="w-full bg-slate-50 border-none rounded-2xl py-6 pr-14 pl-4 text-sm focus-visible:ring-2 focus-visible:ring-[#1B5E20] shadow-none"
-            disabled={loading}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about your footprint... (Shift+Enter for new line)"
+            className="w-full bg-slate-50 border-none rounded-2xl py-4 pr-16 pl-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B5E20] shadow-none resize-none overflow-hidden min-h-[60px]"
+            rows={2}
           />
-          <Button type="submit" disabled={loading || !input.trim()} className="absolute right-2 top-2 h-8 w-8 p-0 bg-[#1B5E20] text-white rounded-xl flex items-center justify-center hover:bg-[#2E7D32]">
-            <SendHorizontal className="w-4 h-4" />
-          </Button>
+          {loading ? (
+             <Button type="button" onClick={handleStop} className="absolute right-2 bottom-2 h-8 w-8 p-0 bg-red-100 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-200">
+               <Square className="w-4 h-4 fill-current" />
+             </Button>
+          ) : (
+             <Button type="submit" disabled={!input.trim()} className="absolute right-2 bottom-2 h-8 w-8 p-0 bg-[#1B5E20] text-white rounded-xl flex items-center justify-center hover:bg-[#2E7D32]">
+               <SendHorizontal className="w-4 h-4" />
+             </Button>
+          )}
         </form>
       </CardFooter>
     </Card>

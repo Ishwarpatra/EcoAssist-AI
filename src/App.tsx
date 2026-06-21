@@ -1,4 +1,4 @@
-import { Routes, Route, Link, Navigate } from "react-router";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router";
 import { AuthProvider, useAuth } from "./components/auth-provider";
 import { DataProvider } from "./components/data-provider";
 import Dashboard from "./pages/Dashboard";
@@ -8,14 +8,18 @@ import Goals from "./pages/Goals";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="p-8">Loading...</div>;
-  if (!user) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} />;
   return <>{children}</>;
 }
 
 function Login() {
   const { signInWithGoogle, user } = useAuth();
-  if (user) return <Navigate to="/" />;
+  const location = useLocation();
+  
+  const from = location.state?.from?.pathname || "/";
+  if (user) return <Navigate to={from} />;
   
   return (
     <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
@@ -26,15 +30,15 @@ function Login() {
       </div>
       
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 z-10 relative">
-        <div className="w-16 h-16 bg-[#1B5E20] rounded-2xl flex items-center justify-center shadow-lg shadow-green-900/20 mb-8 mt-12">
+        <div className="w-16 h-16 bg-[#1B5E20] rounded-2xl flex items-center justify-center shadow-lg shadow-green-900/20 mb-8 mt-12 transition-transform hover:rotate-12 duration-300">
            <svg className="w-8 h-8 text-white relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z"></path>
            </svg>
         </div>
         
-        <h1 className="text-4xl sm:text-6xl font-bold text-slate-900 tracking-tight text-center max-w-4xl leading-tight mb-6">
+        <h1 className="font-heading text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight text-center max-w-4xl leading-tight mb-6">
           Understand Your Carbon Footprint. <br className="hidden sm:block" />
-          <span className="text-[#1B5E20]">Reduce It Smarter.</span>
+          <span className="bg-gradient-to-r from-[#1B5E20] to-[#2E7D32] bg-clip-text text-transparent">Reduce It Smarter.</span>
         </h1>
         
         <p className="text-lg sm:text-xl text-slate-600 text-center max-w-2xl mb-12">
@@ -44,7 +48,14 @@ function Login() {
         <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-xl shadow-slate-200/50 max-w-sm w-full text-center flex flex-col items-center gap-6">
           <p className="font-semibold text-slate-800">Start Your Journey</p>
           <button 
-            onClick={signInWithGoogle}
+            onClick={async () => {
+              try {
+                await signInWithGoogle();
+              } catch (e) {
+                console.error("Sign in blocked or failed", e);
+                alert("Sign-in failed. Please allow popups or try again.");
+              }
+            }}
             className="w-full py-4 bg-[#1B5E20] text-white rounded-2xl text-base font-bold shadow-lg shadow-green-900/10 hover:bg-[#2E7D32] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -63,21 +74,24 @@ function Login() {
 
 function Layout() {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const path = location.pathname;
+
   return (
     <div className="flex bg-slate-50 min-h-screen text-slate-900 font-sans">
       <div className="flex flex-col flex-1 max-w-7xl mx-auto h-screen">
-        <header className="p-4 border-b flex flex-col md:flex-row justify-between items-center bg-white gap-4">
-          <div className="font-bold text-[#1B5E20] text-xl flex items-center gap-2 tracking-tight">
+        <header className="p-4 border-b flex flex-col md:flex-row justify-between items-center bg-white gap-4 w-full shadow-xs">
+          <div className="font-logo font-extrabold text-2xl flex items-center gap-2 tracking-tight shrink-0 bg-gradient-to-r from-green-800 via-emerald-700 to-green-600 bg-clip-text text-transparent transition-transform hover:scale-[1.03] duration-200 select-none cursor-default py-1.5">
             EcoAssist AI
           </div>
-          <nav className="flex flex-wrap justify-center gap-6 items-center">
+          <nav className="flex flex-wrap justify-center overflow-x-auto gap-4 md:gap-6 items-center">
             {user && (
                <>
-                 <Link to="/" className="text-sm font-semibold text-slate-700 hover:text-[#1B5E20] transition-colors">Mission Control</Link>
-                 <Link to="/assessment" className="text-sm font-semibold text-slate-700 hover:text-[#1B5E20] transition-colors">Impact Journey</Link>
-                 <Link to="/assistant" className="text-sm font-semibold text-slate-700 hover:text-[#1B5E20] transition-colors">Climate Twin</Link>
-                 <Link to="/goals" className="text-sm font-semibold text-slate-700 hover:text-[#1B5E20] transition-colors">Weekly Missions</Link>
-                 <button onClick={logout} className="text-sm font-medium text-red-600 hover:text-red-800 ml-2 md:ml-4">Logout</button>
+                 <Link to="/" className={`text-sm font-semibold transition-colors px-2 ${path === '/' ? 'text-[#1B5E20] border-b-2 border-[#1B5E20]' : 'text-slate-500 hover:text-[#1B5E20]'}`}>Mission Control</Link>
+                 <Link to="/assessment" className={`text-sm font-semibold transition-colors px-2 ${path === '/assessment' ? 'text-[#1B5E20] border-b-2 border-[#1B5E20]' : 'text-slate-500 hover:text-[#1B5E20]'}`}>Impact Journey</Link>
+                 <Link to="/assistant" className={`text-sm font-semibold transition-colors px-2 ${path === '/assistant' ? 'text-[#1B5E20] border-b-2 border-[#1B5E20]' : 'text-slate-500 hover:text-[#1B5E20]'}`}>Climate Twin</Link>
+                 <Link to="/goals" className={`text-sm font-semibold transition-colors px-2 ${path === '/goals' ? 'text-[#1B5E20] border-b-2 border-[#1B5E20]' : 'text-slate-500 hover:text-[#1B5E20]'}`}>Weekly Missions</Link>
+                 <button onClick={logout} className="text-sm font-medium text-red-600 hover:text-red-800 ml-2">Logout</button>
                </>
             )}
           </nav>

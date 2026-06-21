@@ -11,6 +11,7 @@ interface DataContextType {
   data: DashboardData | null;
   loading: boolean;
   refreshData: () => Promise<void>;
+  mutateData: (updater: (prev: DashboardData | null) => DashboardData | null) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -20,6 +21,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { fetchWithAuth } = useApi();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const mutateData = (updater: (prev: DashboardData | null) => DashboardData | null) => {
+    setData(prev => updater(prev));
+  };
 
   const refreshData = async () => {
     if (!user) {
@@ -58,7 +63,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   return (
-    <DataContext.Provider value={{ data, loading, refreshData }}>
+    <DataContext.Provider value={{ data, loading, refreshData, mutateData }}>
       {children}
     </DataContext.Provider>
   );
