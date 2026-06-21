@@ -26,13 +26,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setData(prev => updater(prev));
   };
 
-  const refreshData = async () => {
+  const refreshData = async (showSpinner = false) => {
     if (!user) {
       setData(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Only show a blocking loading state on first load (when data is null) or when explicitly requested
+    if (showSpinner || !data) {
+      setLoading(true);
+    }
     try {
       const token = await user.getIdToken();
       const res = await fetchWithAuth('/api/dashboard', token);
@@ -51,15 +54,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshData();
-
-    const handleFocus = () => {
-      refreshData();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
   }, [user]);
 
   return (

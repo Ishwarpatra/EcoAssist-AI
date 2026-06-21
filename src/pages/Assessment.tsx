@@ -47,6 +47,14 @@ export default function Assessment() {
     wasteScore: 0,
   });
 
+  // Define steps for card stack
+  const stepsData = useMemo(() => [
+    { id: 1, title: "Transportation", icon: "🚗 🚌 🚲 ✈️" },
+    { id: 2, title: "Energy & Home", icon: "⚡ 🔥 🌞" },
+    { id: 3, title: "Diet & Food", icon: "🥩 🍗 🥗 🌱" },
+    { id: 4, title: "Lifestyle & Waste", icon: "🛍️ ♻️ 🗑️" }
+  ], []);
+
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     if (step === 1 && (inputs.flightsBase === '' || inputs.kmBase === '')) return;
@@ -151,106 +159,6 @@ export default function Assessment() {
     );
   }
 
-  // Define steps for card stack
-  const stepsData = useMemo(() => [
-    {
-      id: 1,
-      title: "Transportation",
-      icon: "🚗 🚌 🚲 ✈️",
-      content: (
-        <div className="space-y-4">
-          <div className="space-y-2">
-             <Label className="text-slate-700 font-semibold mb-2 block">How many flights do you take per year?</Label>
-             <select 
-               value={inputs.flightsBase}
-               onChange={e => setInputs({ ...inputs, flightsBase: e.target.value })}
-               className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
-             >
-               <option value="" disabled>Please select...</option>
-               <option value="0">0 (I don't fly)</option>
-               <option value="2">1-2 flights</option>
-               <option value="5">3-5 flights</option>
-               <option value="10">6-10 flights</option>
-               <option value="20">More than 10 flights</option>
-             </select>
-          </div>
-          <div className="space-y-2 mt-6">
-             <Label className="text-slate-700 font-semibold mb-2 block">How many km do you drive weekly?</Label>
-             <Input 
-               type="number" 
-               required
-               value={inputs.kmBase}
-               onChange={e => setInputs({ ...inputs, kmBase: e.target.value })}
-               placeholder="e.g. 150"
-               className="bg-slate-50 border-slate-200 rounded-2xl py-6 px-4 text-sm focus-visible:ring-[#1B5E20]"
-             />
-          </div>
-        </div>
-      )
-    },
-    {
-      id: 2,
-      title: "Energy & Home",
-      icon: "⚡ 🔥 🌞",
-      content: (
-        <div className="space-y-2 mt-4">
-          <Label className="text-slate-700 font-semibold mb-2 block">Describe your home's energy usage</Label>
-          <select 
-            value={inputs.energyBase}
-            onChange={e => setInputs({ ...inputs, energyBase: e.target.value })}
-            className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
-          >
-            <option value="" disabled>Please select...</option>
-            <option value="low">Low (Small apartment, no AC, energy efficient)</option>
-            <option value="moderate">Moderate (Average house, standard usage)</option>
-            <option value="high">High (Large house, frequent heating/cooling)</option>
-          </select>
-        </div>
-      )
-    },
-    {
-      id: 3,
-      title: "Diet & Food",
-      icon: "🥩 🍗 🥗 🌱",
-      content: (
-        <div className="space-y-2 mt-4">
-          <Label className="text-slate-700 font-semibold mb-2 block">What best describes your diet?</Label>
-          <select 
-            value={inputs.foodBase}
-            onChange={e => setInputs({ ...inputs, foodBase: e.target.value })}
-            className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
-          >
-            <option value="" disabled>Please select...</option>
-            <option value="heavy_meat">Heavy Meat (Beef/lamb most days)</option>
-            <option value="moderate">Moderate (Mixed diet, some meat)</option>
-            <option value="vegetarian">Vegetarian (No meat, but dairy/eggs)</option>
-            <option value="vegan">Vegan (Plant-based only)</option>
-          </select>
-        </div>
-      )
-    },
-    {
-      id: 4,
-      title: "Lifestyle & Waste",
-      icon: "🛍️ ♻️ 🗑️",
-      content: (
-        <div className="space-y-2 mt-4">
-          <Label className="text-slate-700 font-semibold mb-2 block">How do you describe your recycling and waste habits?</Label>
-          <select 
-            value={inputs.wasteBase}
-            onChange={e => setInputs({ ...inputs, wasteBase: e.target.value })}
-            className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
-          >
-            <option value="" disabled>Please select...</option>
-            <option value="great">Excellent (Compost, strict recycling, low packaging)</option>
-            <option value="moderate">Average (Standard recycling, some plastic waste)</option>
-            <option value="bad">Poor (Rarely recycle, high plastic usage)</option>
-          </select>
-        </div>
-      )
-    }
-  ], [inputs]);
-
   return (
     <div className="max-w-xl mx-auto py-8">
       <div className="text-center mb-16">
@@ -298,7 +206,7 @@ export default function Assessment() {
                       </div>
                       
                       <h2 className="text-2xl font-bold text-slate-800 mb-6">{stepData.title}</h2>
-                      {stepData.content}
+                      <StepContent id={stepData.id} inputs={inputs} setInputs={setInputs} />
                       
                       {isActive && (
                         <div className="mt-10 flex gap-4">
@@ -326,4 +234,97 @@ export default function Assessment() {
       </div>
     </div>
   );
+}
+
+interface StepContentProps {
+  id: number;
+  inputs: any;
+  setInputs: React.Dispatch<React.SetStateAction<any>>;
+}
+
+function StepContent({ id, inputs, setInputs }: StepContentProps) {
+  switch (id) {
+    case 1:
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+             <Label className="text-slate-700 font-semibold mb-2 block font-sans">How many flights do you take per year?</Label>
+             <select 
+               value={inputs.flightsBase}
+               onChange={e => setInputs((prev: any) => ({ ...prev, flightsBase: e.target.value }))}
+               className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
+             >
+               <option value="" disabled>Please select...</option>
+               <option value="0">0 (I don't fly)</option>
+               <option value="2">1-2 flights</option>
+               <option value="5">3-5 flights</option>
+               <option value="10">6-10 flights</option>
+               <option value="20">More than 10 flights</option>
+             </select>
+          </div>
+          <div className="space-y-2 mt-6">
+             <Label className="text-slate-700 font-semibold mb-2 block font-sans">How many km do you drive weekly?</Label>
+             <Input 
+               type="number" 
+               required
+               value={inputs.kmBase}
+               onChange={e => setInputs((prev: any) => ({ ...prev, kmBase: e.target.value }))}
+               placeholder="e.g. 150"
+               className="bg-slate-50 border-slate-200 rounded-2xl py-6 px-4 text-sm focus-visible:ring-[#1B5E20]"
+             />
+          </div>
+        </div>
+      );
+    case 2:
+      return (
+        <div className="space-y-2 mt-4">
+          <Label className="text-slate-700 font-semibold mb-2 block font-sans">Describe your home's energy usage</Label>
+          <select 
+            value={inputs.energyBase}
+            onChange={e => setInputs((prev: any) => ({ ...prev, energyBase: e.target.value }))}
+            className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
+          >
+            <option value="" disabled>Please select...</option>
+            <option value="low">Low (Small apartment, no AC, energy efficient)</option>
+            <option value="moderate">Moderate (Average house, standard usage)</option>
+            <option value="high">High (Large house, frequent heating/cooling)</option>
+          </select>
+        </div>
+      );
+    case 3:
+      return (
+        <div className="space-y-2 mt-4">
+          <Label className="text-slate-700 font-semibold mb-2 block font-sans">What best describes your diet?</Label>
+          <select 
+            value={inputs.foodBase}
+            onChange={e => setInputs((prev: any) => ({ ...prev, foodBase: e.target.value }))}
+            className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
+          >
+            <option value="" disabled>Please select...</option>
+            <option value="heavy_meat">Heavy Meat (Beef/lamb most days)</option>
+            <option value="moderate">Moderate (Mixed diet, some meat)</option>
+            <option value="vegetarian">Vegetarian (No meat, but dairy/eggs)</option>
+            <option value="vegan">Vegan (Plant-based only)</option>
+          </select>
+        </div>
+      );
+    case 4:
+      return (
+        <div className="space-y-2 mt-4">
+          <Label className="text-slate-700 font-semibold mb-2 block font-sans">How do you describe your recycling and waste habits?</Label>
+          <select 
+            value={inputs.wasteBase}
+            onChange={e => setInputs((prev: any) => ({ ...prev, wasteBase: e.target.value }))}
+            className="flex h-14 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
+          >
+            <option value="" disabled>Please select...</option>
+            <option value="great">Excellent (Compost, strict recycling, low packaging)</option>
+            <option value="moderate">Average (Standard recycling, some plastic waste)</option>
+            <option value="bad">Poor (Rarely recycle, high plastic usage)</option>
+          </select>
+        </div>
+      );
+    default:
+      return null;
+  }
 }
