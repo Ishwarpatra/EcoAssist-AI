@@ -42,8 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       await signInWithPopup(auth, googleAuthProvider);
-    } catch (error) {
-      console.error('Error signing in with Google:', error);
+    } catch (error: any) {
+      if (error?.code === 'auth/popup-closed-by-user' || error?.message?.includes('popup-closed')) {
+        console.warn('Google sign-in popup was closed by the user.');
+      } else {
+        console.error('Error signing in with Google:', error);
+      }
+      throw error;
     }
   };
 

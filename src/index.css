@@ -9,7 +9,7 @@
 @theme inline {
     --font-heading: 'Space Grotesk', sans-serif;
     --font-sans: 'Outfit', sans-serif;
-    --font-logo: 'Syne', sans-serif;
+    --font-logo: 'Space Grotesk', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
